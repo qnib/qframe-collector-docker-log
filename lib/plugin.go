@@ -14,6 +14,7 @@ import (
 const (
 	version = "0.0.1"
 	pluginTyp = "collector"
+	pluginPkg = "docker-log"
 	dockerAPI = "v1.29"
 )
 
@@ -35,11 +36,12 @@ type ContainerSupervisor struct {
 }
 
 
-func (p *Plugin) StartSupervisor(CntID, CntName string) {
+func (p *Plugin) StartSupervisor(CntID, CntName string, cnt types.ContainerJSON) {
 	s := ContainerSupervisor{
 		Plugin: *p,
 		CntID: CntID,
 		CntName: CntName,
+		Container: cnt,
 		Com: make(chan interface{}),
 		cli: p.cli,
 		qChan: p.QChan,
@@ -49,7 +51,7 @@ func (p *Plugin) StartSupervisor(CntID, CntName string) {
 }
 
 func (p *Plugin) StartSupervisorCE(ce qtypes.ContainerEvent) {
-	p.StartSupervisor(ce.Event.Actor.ID, ce.Event.Actor.Attributes["name"])
+	p.StartSupervisor(ce.Event.Actor.ID, ce.Event.Actor.Attributes["name"], ce.Container)
 }
 
 func (cs ContainerSupervisor) Run() {
@@ -64,7 +66,7 @@ func (cs ContainerSupervisor) Run() {
 	scanner := bufio.NewScanner(reader)
     for scanner.Scan() {
 		base := qtypes.NewBase(cs.Name)
-        qm := qtypes.NewMessage(base, cs.Name, qtypes.MsgDLOG, scanner.Text())
+        qm := qtypes.NewContainerMessage(base, cs.Container, cs.Name, qtypes.MsgDLOG, scanner.Text())
 		cs.qChan.Data.Send(qm)
     }
 	err = scanner.Err()
@@ -98,7 +100,7 @@ type Plugin struct {
 func New(qChan qtypes.QChan, cfg config.Config, name string) (Plugin, error) {
 	var err error
 	p := Plugin{
-		Plugin: qtypes.NewNamedPlugin(qChan, cfg, pluginTyp, name, version),
+		Plugin: qtypes.NewNamedPlugin(qChan, cfg, pluginTyp, pluginPkg,  name, version),
 		sMap: map[string]ContainerSupervisor{},
 	}
 	return p, err
