@@ -77,7 +77,9 @@ func (cs ContainerSupervisor) Run() {
 	scanner := bufio.NewScanner(reader)
     for scanner.Scan() {
 		base := qtypes.NewBase(cs.Name)
-        qm := qtypes.NewContainerMessage(base, cs.Container, cs.Name, qtypes.MsgDLOG, scanner.Text())
+		line := scanner.Text()
+        qm := qtypes.NewContainerMessage(base, cs.Container, cs.Name, qtypes.MsgDLOG, line)
+		cs.Log("debug", fmt.Sprintf("Container '%s': %s", cs.Name, line))
 		cs.qChan.Data.Send(qm)
     }
 	err = scanner.Err()
