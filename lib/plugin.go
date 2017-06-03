@@ -155,6 +155,7 @@ func (p *Plugin) SubscribeRunning() {
 		}
 	}
 }
+
 func (p *Plugin) Run() {
 	p.Log("notice", fmt.Sprintf("Start v%s", p.Version))
 
@@ -196,12 +197,12 @@ func (p *Plugin) Run() {
 				if ce.Event.Type == "container" && (strings.HasPrefix(ce.Event.Action, "exec_create") || strings.HasPrefix(ce.Event.Action, "exec_start")) {
 					continue
 				}
-				p.Log("info", fmt.Sprintf("Received: %s", ce.Message))
+				p.Log("debug", fmt.Sprintf("Received: %s", ce.Message))
 				switch ce.Event.Type {
 				case "container":
 					switch ce.Event.Action {
 					case "start":
-						p.Log("info", fmt.Sprintf("Container started: %s | ID:%s", ce.Container.Name, ce.Container.ID))
+						p.Log("debug", fmt.Sprintf("Container started: %s | ID:%s", ce.Container.Name, ce.Container.ID))
 						p.StartSupervisorCE(ce)
 					case "die":
 						p.sMap[ce.Event.Actor.ID].Com <- ce.Event.Action
