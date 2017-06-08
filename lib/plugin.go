@@ -13,6 +13,7 @@ import (
 	"github.com/zpatrick/go-config"
 
 	"github.com/qnib/qframe-types"
+	"regexp"
 )
 
 const (
@@ -31,6 +32,7 @@ var (
 // -> allow for gracefully shutdown of the supervisor
 type ContainerSupervisor struct {
 	Plugin
+	TailRunning string
 	Action      string
 	CntID 		string 			 // ContainerID
 	CntName 	string			 // sanatized name of container
@@ -52,6 +54,9 @@ func (p *Plugin) StartSupervisor(ce events.Message, cnt types.ContainerJSON) {
 		cli: p.cli,
 		qChan: p.QChan,
 	}
+	if p.CfgBoolOr("disable-reparse-logs", false) {
+		s.TailRunning = p.CfgStringOr("tail-logs-since", "1m")
+	}
 	p.sMap[ce.Actor.ID] = s
 	go s.Run()
 }
@@ -64,9 +69,9 @@ func (cs ContainerSupervisor) Run() {
 	msg := fmt.Sprintf("Start listener for: '%s' [%s]", cs.CntName, cs.CntID)
 	cs.Log("info", msg)
 
-	logOpts := types.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Follow: true, Tail: "all"}
+	logOpts := types.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Follow: true, Tail: "any", Timestamps: true}
 	if cs.Action == "running" {
-		logOpts.Tail = "0"
+		logOpts.Tail = cs.TailRunning
 	}
 	reader, err := cs.cli.ContainerLogs(ctx, cs.CntID, logOpts)
 	if err != nil {
@@ -76,10 +81,18 @@ func (cs ContainerSupervisor) Run() {
 	}
 	scanner := bufio.NewScanner(reader)
     for scanner.Scan() {
-		base := qtypes.NewBase(cs.Name)
 		line := scanner.Text()
-        qm := qtypes.NewContainerMessage(base, cs.Container, cs.Name, qtypes.MsgDLOG, line)
-		cs.Log("debug", fmt.Sprintf("Container '%s': %s", cs.Name, line))
+		sText := strings.Split(line, " ")
+		shostL := strings.TrimLeft(strings.Join(sText[1:], " "), " ")
+		var base qtypes.Base
+		lTime, err := fuzzyParseTime(sText[0])
+		if err != nil {
+			base = qtypes.NewBase(cs.Name)
+		} else {
+			base = qtypes.NewTimedBase(cs.Name, lTime)
+		}
+		qm := qtypes.NewContainerMessage(base, cs.Container, cs.Name, qtypes.MsgDLOG, shostL)
+		cs.Log("debug", fmt.Sprintf("MsgDigest:'%s'  | Container '%s': %s", qm.GetMessageDigest(), cs.Container.Name, shostL))
 		cs.qChan.Data.Send(qm)
     }
 	err = scanner.Err()
@@ -102,6 +115,19 @@ func (cs ContainerSupervisor) Run() {
 			}
 		}
 	}
+}
+
+func fuzzyParseTime(s string) (t time.Time, err error) {
+	t, err = time.Parse(time.RFC3339, s)
+	if err != nil {
+		regex := regexp.MustCompile(`2\d{3}.*`)
+		match := regex.FindString(s)
+		if match != "" {
+			t, err = time.Parse(time.RFC3339, match)
+			return
+		}
+	}
+	return
 }
 
 type Plugin struct {
