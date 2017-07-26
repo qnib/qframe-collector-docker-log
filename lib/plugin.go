@@ -29,6 +29,7 @@ var (
 type Plugin struct {
 	qtypes.Plugin
 	cli *client.Client
+	info types.Info
 	sMap map[string]ContainerSupervisor
 	TimeRegex   *regexp.Regexp
 }
@@ -113,17 +114,17 @@ func (p *Plugin) Run() {
 		p.Log("error", fmt.Sprintf("Could not connect docker/docker/client to '%s': %v", dockerHost, err))
 		return
 	}
-	info, err := p.cli.Info(ctx)
+	p.info, err = p.cli.Info(ctx)
 	if err != nil {
-		p.Log("error", fmt.Sprintf("Error during Info(): %v >err> %s", info, err))
+		p.Log("error", fmt.Sprintf("Error during Info(): %v >err> %s", p.info, err))
 		return
 	} else {
-		p.Log("info", fmt.Sprintf("Connected to '%s' / v'%s' (SWARM: %s)", info.Name, info.ServerVersion, info.Swarm.LocalNodeState))
+		p.Log("info", fmt.Sprintf("Connected to '%s' / v'%s' (SWARM: %s)", p.info.Name, p.info.ServerVersion, p.info.Swarm.LocalNodeState))
 	}
 	// need to start listener for all containers
 	skipRunning := p.CfgBoolOr("skip-running", false)
 	if ! skipRunning {
-		p.Log("info", fmt.Sprintf("Start listeners for already running containers: %d", info.ContainersRunning))
+		p.Log("info", fmt.Sprintf("Start listeners for already running containers: %d", p.info.ContainersRunning))
 		p.SubscribeRunning()
 	}
 	inputs := p.GetInputs()
